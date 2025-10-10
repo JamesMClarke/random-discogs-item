@@ -1,0 +1,2 @@
+make:
+	pip install -e .

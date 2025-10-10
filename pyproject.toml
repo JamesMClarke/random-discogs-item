@@ -1,0 +1,6 @@
+[project]
+name = "random-discogs-item"
+version = "0.1.0"
+dependencies = ["dotenv", "discogs-client"]  # or whatever you need
+[project.scripts]
+random-discogs-item = "random_item:main"
