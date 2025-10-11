@@ -13,13 +13,19 @@ def main():
     parser.add_argument("who", type=str, help="Who's folder to get the item from", choices=["alice","james","both"])
     parser.add_argument('-s', '--singles', action='store_true', help="Include singles")
     parser.add_argument('--notShared', action='store_false', help="Exclude shared folder")
+    parser.add_argument('--debug', action='store_true', help="Enable debug mode")
     args = parser.parse_args()
 
     d = discogs_client.Client('ExampleApplication/0.1', user_token=TOKEN)
+
     user = d.identity()
-    # print("Folders:")
-    # for folder in user.collection_folders:
-    #     print(f"{folder.id}: {folder.name} ({folder.count} items)")
+
+    if args.debug:
+        print(f"User: {user.username}")
+        print("Folders:")
+        for folder in user.collection_folders:
+            print(f"{folder.id}: {folder.name} ({folder.count} items)")
+
 
     if args.who == "alice" or args.who == "both":
         alice_records = [folder.releases for folder in user.collection_folders if "Alice LPs" in folder.name]
