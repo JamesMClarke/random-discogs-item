@@ -1,3 +1,4 @@
 .env
 .vscode
 random_discogs_item.egg-info
+__pycache__
