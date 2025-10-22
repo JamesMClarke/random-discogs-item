@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+
+	"random-discogs-item/models"
 
 	"github.com/joho/godotenv"
 )
@@ -57,4 +60,98 @@ func getUsername() string {
 
 	log.Fatal("username not found in response")
 	return ""
+}
+
+func getFolders() []models.CollectionFolder {
+	// Get folders from Discogs API using token and username
+	client := &http.Client{}
+	username := getUsername()
+	url := "https://api.discogs.com/users/" + username + "/collection/folders"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addAuth(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Parse JSON and return the folders
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		log.Fatal(err)
+	}
+
+	folders := []models.CollectionFolder{}
+	if f, ok := data["folders"].([]interface{}); ok {
+		for _, folder := range f {
+			folderBytes, err := json.Marshal(folder)
+			if err != nil {
+				log.Fatal(err)
+			}
+			var cf models.CollectionFolder
+			if err := json.Unmarshal(folderBytes, &cf); err != nil {
+				log.Fatal(err)
+			}
+			folders = append(folders, cf)
+		}
+	}
+	return folders
+}
+
+func getFolderItems(folderID int, folderName string) []models.Record {
+	// Get collection items from Discogs API using token and username
+	client := &http.Client{}
+	username := getUsername()
+	url := "https://api.discogs.com/users/" + username + "/collection/folders/" +
+		fmt.Sprintf("%d", folderID) + "/releases"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addAuth(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Parse JSON and return the collection items
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		log.Fatal(err)
+	}
+
+	records := []models.Record{}
+	if r, ok := data["releases"].([]interface{}); ok {
+		for _, item := range r {
+			itemBytes, err := json.Marshal(item)
+			if err != nil {
+				log.Fatal(err)
+			}
+			var record models.Record
+			if err := json.Unmarshal(itemBytes, &record); err != nil {
+				log.Fatal(err)
+			}
+			record.FolderName = folderName
+			records = append(records, record)
+		}
+	}
+	return records
 }
