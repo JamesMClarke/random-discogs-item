@@ -7,6 +7,7 @@ debug:
 
 make:
 	$(CONDA) env create -f ENV.yml
+	$(CONDA) activate discogs
 	$(CONDA) run -n discogs pip install -e .
 
 remove:

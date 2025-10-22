@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -9,11 +10,10 @@ import (
 )
 
 // TODO: Add error handling
-// TODO: Add logic to only update cache if data has changed
 // TODO: Add command line flags for folder selection, etc.
 // TODO: Add command line flags for cache location, force refresh, etc.
 // TODO: Get random item from cached data depending on criteria
-var debug = true
+var debug bool
 
 func main() {
 	auth := models.Auth{
@@ -25,11 +25,52 @@ func main() {
 		fmt.Println("Username:", auth.Username)
 	}
 
+	singles := flag.Bool("singles", true, "Whether to include singles in the selection")
+	notShared := flag.Bool("not-shared", false, "Whether to exclude shared items")
+	forceUpdate := flag.Bool("force-update", false, "Whether to force update the cache")
+	debug := flag.Bool("debug", false, "Enable debug mode")
+
+	// Custom usage message
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [who] [options]\n\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Positional arguments:")
+		fmt.Fprintln(os.Stderr, "  who\tWho's folder to get the item from (choices: alice, james, both)\n")
+		fmt.Fprintln(os.Stderr, "Options:")
+		flag.PrintDefaults() // prints all the flag definitions automatically
+	}
+
+	// Parse command-line arguments
+	flag.Parse()
+
+	// Handle positional arguments
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s [who] [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "who must be one of: alice, james, both\n")
+		os.Exit(1)
+	}
+
+	who := args[0]
+	validWho := map[string]bool{"alice": true, "james": true, "both": true}
+	if !validWho[who] {
+		fmt.Fprintf(os.Stderr, "Invalid argument for who: %s (must be one of alice, james, both)\n", who)
+		os.Exit(1)
+	}
+
+	// Print results
+	if *debug {
+		fmt.Printf("who: %s\n", who)
+		fmt.Printf("singles: %v\n", *singles)
+		fmt.Printf("notShared: %v\n", *notShared)
+		fmt.Printf("debug: %v\n", *debug)
+		fmt.Printf("forceUpdate: %v\n", *forceUpdate)
+	}
+
 	// Get length of collection
 	collectionLength := getLengthOfCollection()
 	cacheLength := getCacheLength()
 
-	if cacheLength != collectionLength {
+	if cacheLength != collectionLength || *forceUpdate {
 		fmt.Printf("Cached records is a different length (%d vs %d), updating cache...\n", cacheLength, collectionLength)
 		updateCache()
 	}
