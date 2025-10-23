@@ -148,7 +148,8 @@ func getCacheLength() int {
 	cacheFile := cacheDir() + "records_cache.json"
 	file, err := os.Open(cacheFile)
 	if err != nil {
-		log.Fatal(err)
+		// Return empty slice on error
+		return 0
 	}
 	defer file.Close()
 
@@ -168,8 +169,10 @@ func updateCache() {
 		if folder.Name == "All" {
 			continue
 		}
-		fmt.Printf("Folder ID: %d, Name: %s, Count: %d, Resource URL: %s\n",
-			folder.ID, folder.Name, folder.Count, folder.ResourceURL)
+		if debug {
+			fmt.Printf("Folder ID: %d, Name: %s, Count: %d, Resource URL: %s\n",
+				folder.ID, folder.Name, folder.Count, folder.ResourceURL)
+		}
 		records = append(records, getFolderItems(folder.ID, folder.Name)...)
 	}
 
