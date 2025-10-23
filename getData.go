@@ -210,3 +210,19 @@ func getLengthOfCollection() int {
 	log.Fatal("count not found in response")
 	return 0
 }
+
+func getRecordsFromCache() []models.Record {
+	cacheFile := cacheDir() + "records_cache.json"
+	file, err := os.Open(cacheFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	var records []models.Record
+	err = json.NewDecoder(file).Decode(&records)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return records
+}

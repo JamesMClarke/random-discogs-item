@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"random-discogs-item/models"
 )
@@ -25,7 +26,7 @@ func main() {
 		fmt.Println("Username:", auth.Username)
 	}
 
-	singles := flag.Bool("singles", true, "Whether to include singles in the selection")
+	singles := flag.Bool("singles", false, "Whether to include singles in the selection")
 	notShared := flag.Bool("not-shared", false, "Whether to exclude shared items")
 	forceUpdate := flag.Bool("force-update", false, "Whether to force update the cache")
 	debug := flag.Bool("debug", false, "Enable debug mode")
@@ -73,7 +74,53 @@ func main() {
 	if cacheLength != collectionLength || *forceUpdate {
 		fmt.Printf("Cached records is a different length (%d vs %d), updating cache...\n", cacheLength, collectionLength)
 		updateCache()
+	} else if *debug {
+		fmt.Println("Cache is up to date, no need to update.")
 	}
+
+	allRecords := getRecordsFromCache()
+	if *debug {
+		fmt.Printf("Total records in cache: %d\n", len(allRecords))
+	}
+	filteredRecords := []models.Record{}
+	switch who {
+	case "alice":
+		filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Alice LPs")...)
+		if *singles {
+			filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Alice Singles")...)
+		}
+	case "james":
+		filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "James LPs")...)
+		if *singles {
+			filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "James Singles")...)
+		}
+	case "both":
+		filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "James LPs")...)
+		if *singles {
+			filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "James Singles")...)
+		}
+		filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Alice LPs")...)
+		if *singles {
+			filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Alice Singles")...)
+		}
+	}
+	if !*notShared {
+		filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Shared LPs")...)
+		if *singles {
+			filteredRecords = append(filteredRecords, filterRecordsByFolder(allRecords, "Shared Singles")...)
+		}
+	}
+
+	if *debug {
+		fmt.Printf("Total records after filtering: %d\n", len(filteredRecords))
+		for _, record := range filteredRecords {
+			displayRecord(record)
+		}
+	}
+
+	item := getRandomItem(filteredRecords)
+	displayRecord(item)
+	return
 }
 
 func cacheDir() string {
@@ -144,4 +191,34 @@ func updateCache() {
 		log.Fatal(err)
 	}
 	fmt.Println("Records cached to", cacheFile)
+}
+
+func filterRecordsByFolder(records []models.Record, folderName string) []models.Record {
+	filtered := []models.Record{}
+	for _, record := range records {
+		if record.FolderName == folderName {
+			filtered = append(filtered, record)
+		}
+	}
+	return filtered
+}
+
+func displayRecord(record models.Record) {
+	fmt.Printf("Record ID: %d\n", record.ID)
+	fmt.Printf("Title: %s\n", record.BasicInformation.Title)
+	fmt.Printf("Year: %d\n", record.BasicInformation.Year)
+	fmt.Printf("Format: ")
+	for _, format := range record.BasicInformation.Formats {
+		fmt.Printf("%s ", format.Name)
+	}
+	fmt.Printf("\nResource URL: %s\n", record.BasicInformation.ResourceURL)
+	fmt.Printf("Folder Name: %s\n", record.FolderName)
+}
+
+func getRandomItem(records []models.Record) models.Record {
+	if len(records) == 0 {
+		log.Fatal("No records available to select from.")
+	}
+	randIndex := rand.Intn(len(records))
+	return records[randIndex]
 }
