@@ -3,19 +3,19 @@
 This is a simple script for picking a random item from my Discogs collection. 
 The script requires an env file with the following, in the same directory.
 
-     TOKEN = "<YOUR TOKEN>"
+     DISCOGS_TOKEN = "<YOUR TOKEN>"
 
 You can then run make, and use the script with the following:
+     Usage: ./random-discogs-item [who] [options]
 
-    usage: random-discogs-item [-h] [-s] [--notShared] {alice,james,both}
-
-    Get a random item from a Discogs collection folder.
-
-    positional arguments:
-    {alice,james,both}  Who's folder to get the item from
-
-    options:
-    -h, --help          show this help message and exit
-    -s, --singles       Include singles
-    --notShared         Exclude shared folder
-
+     Positional arguments:
+     who   Who's folder to get the item from (choices: alice, james, both)
+     Options:
+     -debug
+          Enable debug mode
+     -force-update
+          Whether to force update the cache
+     -not-shared
+          Whether to exclude shared items
+     -singles
+          Whether to include singles in the selection
