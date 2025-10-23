@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"math/rand"
 	"os"
 	"random-discogs-item/models"
+
+	"github.com/dolmen-go/kittyimg"
 )
 
 // TODO: Add error handling
-// TODO: Add command line flags for folder selection, etc.
-// TODO: Add command line flags for cache location, force refresh, etc.
-// TODO: Get random item from cached data depending on criteria
 var debug bool
 
 func main() {
@@ -204,15 +207,42 @@ func filterRecordsByFolder(records []models.Record, folderName string) []models.
 }
 
 func displayRecord(record models.Record) {
-	fmt.Printf("Record ID: %d\n", record.ID)
-	fmt.Printf("Title: %s\n", record.BasicInformation.Title)
-	fmt.Printf("Year: %d\n", record.BasicInformation.Year)
-	fmt.Printf("Format: ")
-	for _, format := range record.BasicInformation.Formats {
-		fmt.Printf("%s ", format.Name)
+	fmt.Printf("Title: %s,", record.BasicInformation.Title)
+	fmt.Printf("Artists: %s,", func() string {
+		artistNames := ""
+		for i, artist := range record.BasicInformation.Artists {
+			if i > 0 {
+				artistNames += ", "
+			}
+			artistNames += artist.Name
+		}
+		return artistNames
+	}())
+	fmt.Printf("Year: %d \n", record.BasicInformation.Year)
+	fmt.Printf("Cover:\n")
+
+	if record.BasicInformation.CoverImage != "" {
+		// Get image
+		resp, err := httpClient.Get(record.BasicInformation.CoverImage)
+		if err != nil {
+			log.Println("Failed to fetch image:", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Decode to image.Image so kittyimg.Fprint can render it
+		img, _, err := image.Decode(resp.Body)
+		if err != nil {
+			log.Println("Failed to decode image:", err)
+			return
+		}
+
+		kittyimg.Fprint(os.Stdout, img)
+		os.Stdout.WriteString("\n")
+
+	} else {
+		fmt.Println("No cover image available.")
 	}
-	fmt.Printf("\nResource URL: %s\n", record.BasicInformation.ResourceURL)
-	fmt.Printf("Folder Name: %s\n", record.FolderName)
 }
 
 func getRandomItem(records []models.Record) models.Record {

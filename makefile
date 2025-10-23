@@ -1,12 +1,12 @@
 # Makefile
+make:
+	go build .
+
 test:
 	go run . james
 
 testDebug:
 	go run . -debug james 
-
-make:
-	go build .
 
 install:
 	go install .
