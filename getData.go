@@ -3,120 +3,112 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"random-discogs-item/models"
 
 	"github.com/joho/godotenv"
 )
 
+// Reuse a single HTTP client and cache token/username to avoid repeated work
+var (
+	httpClient  = &http.Client{Timeout: 15 * time.Second}
+	cachedToken string
+	cachedUser  string
+)
+
 func addAuth(req *http.Request) {
-	req.Header.Add("Authorization", "Discogs token="+getToken())
+	token := getToken()
+	if token != "" {
+		req.Header.Set("Authorization", "Discogs token="+token)
+	}
 }
 
 func getToken() string {
-	// Get token from env
-	err := godotenv.Load() // loads from .env in current directory
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if cachedToken != "" {
+		return cachedToken
 	}
 
-	return os.Getenv("DISCOGS_TOKEN")
+	// Load env if necessary
+	_ = godotenv.Load()
+	cachedToken = os.Getenv("DISCOGS_TOKEN")
+	return cachedToken
 }
 
 func getUsername() string {
-	// Get username from Discogs API using token
-	client := &http.Client{}
+	if cachedUser != "" {
+		return cachedUser
+	}
+
 	req, err := http.NewRequest("GET", "https://api.discogs.com/oauth/identity", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	addAuth(req)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Fatalf("unexpected status from /oauth/identity: %s", resp.Status)
 	}
 
-	// Parse JSON and return the username
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Fatal(err)
+	// Use Decoder directly to stream and avoid double-marshalling
+	var data struct {
+		Username string `json:"username"`
 	}
-
-	if username, ok := data["username"].(string); ok {
-		return username
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&data); err != nil {
+		log.Fatal("failed to decode oauth/identity response:", err)
 	}
-
-	log.Fatal("username not found in response")
-	return ""
+	if data.Username == "" {
+		log.Fatal("username not found in response")
+	}
+	cachedUser = data.Username
+	return cachedUser
 }
 
 func getFolders() []models.CollectionFolder {
-	// Get folders from Discogs API using token and username
-	client := &http.Client{}
 	username := getUsername()
-	url := "https://api.discogs.com/users/" + username + "/collection/folders"
+	url := fmt.Sprintf("https://api.discogs.com/users/%s/collection/folders", username)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	addAuth(req)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Fatalf("unexpected status from folders endpoint: %s", resp.Status)
 	}
 
-	// Parse JSON and return the folders
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Fatal(err)
+	var data struct {
+		Folders []models.CollectionFolder `json:"folders"`
 	}
-
-	folders := []models.CollectionFolder{}
-	if f, ok := data["folders"].([]interface{}); ok {
-		for _, folder := range f {
-			folderBytes, err := json.Marshal(folder)
-			if err != nil {
-				log.Fatal(err)
-			}
-			var cf models.CollectionFolder
-			if err := json.Unmarshal(folderBytes, &cf); err != nil {
-				log.Fatal(err)
-			}
-			folders = append(folders, cf)
-		}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&data); err != nil {
+		log.Fatal("failed to decode folders response:", err)
 	}
-	return folders
+	return data.Folders
 }
 
 func getFolderItems(folderID int, folderName string) []models.Record {
-	// Get collection items from Discogs API using token and username
-	// TODO: Handle pagination
-	client := &http.Client{}
 	username := getUsername()
 	records := []models.Record{}
+
 	for page := 1; ; page++ {
-		url := "https://api.discogs.com/users/" + username + "/collection/folders/" +
-			fmt.Sprintf("%d", folderID) + "/releases?page=" + fmt.Sprintf("%d", page)
+		url := fmt.Sprintf("https://api.discogs.com/users/%s/collection/folders/%d/releases?page=%d", username, folderID, page)
 		if debug {
 			fmt.Println("Fetching URL:", url)
 		}
@@ -126,89 +118,75 @@ func getFolderItems(folderID int, folderName string) []models.Record {
 		}
 		addAuth(req)
 
-		resp, err := client.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer resp.Body.Close()
-
-		// Read response body
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatal(err)
+		if resp.Body == nil {
+			resp.Body.Close()
+			break
 		}
 
-		// Parse JSON and return the collection items
-		var data map[string]interface{}
-		if err := json.Unmarshal(body, &data); err != nil {
-			log.Fatal(err)
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			log.Fatalf("unexpected status fetching folder items: %s", resp.Status)
 		}
 
-		if r, ok := data["releases"].([]interface{}); ok {
-			for _, item := range r {
-				itemBytes, err := json.Marshal(item)
-				if err != nil {
-					log.Fatal(err)
-				}
-				var record models.Record
-				if err := json.Unmarshal(itemBytes, &record); err != nil {
-					log.Fatal(err)
-				}
-				record.FolderName = folderName
-				records = append(records, record)
-			}
+		var data struct {
+			Releases   []models.Record `json:"releases"`
+			Pagination struct {
+				Pages int `json:"pages"`
+			} `json:"pagination"`
+		}
+		dec := json.NewDecoder(resp.Body)
+		if err := dec.Decode(&data); err != nil {
+			resp.Body.Close()
+			log.Fatal("failed to decode folder items response:", err)
+		}
+		resp.Body.Close()
+
+		for _, r := range data.Releases {
+			r.FolderName = folderName
+			records = append(records, r)
 		}
 
-		// Check for pagination
-		if pagination, ok := data["pagination"].(map[string]interface{}); ok {
-			if pages, ok := pagination["pages"].(float64); ok {
-				if debug {
-					fmt.Println("Folder:", folderName, "Page:", page, "of", int(pages))
-				}
-				if int(pages) <= page {
-					break
-				}
-			}
+		if data.Pagination.Pages <= page || data.Pagination.Pages == 0 {
+			break
 		}
 	}
 	return records
-
 }
 
 func getLengthOfCollection() int {
-	// Get length of collection from Discogs API using token and username
-	client := &http.Client{}
 	username := getUsername()
-	url := "https://api.discogs.com/users/" + username + "/collection/folders/0"
+	url := fmt.Sprintf("https://api.discogs.com/users/%s/collection/folders/0", username)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	addAuth(req)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Fatalf("unexpected status from collection length endpoint: %s", resp.Status)
 	}
 
-	// Parse JSON and return the collection length
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		log.Fatal(err)
+	var data struct {
+		Count int `json:"count"`
 	}
-	if count, ok := data["count"].(float64); ok {
-		return int(count)
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&data); err != nil {
+		log.Fatal("failed to decode collection length response:", err)
 	}
-
-	log.Fatal("count not found in response")
-	return 0
+	if data.Count == 0 {
+		log.Fatal("count not found in response")
+	}
+	return data.Count
 }
 
 func getRecordsFromCache() []models.Record {
@@ -220,8 +198,8 @@ func getRecordsFromCache() []models.Record {
 	defer file.Close()
 
 	var records []models.Record
-	err = json.NewDecoder(file).Decode(&records)
-	if err != nil {
+	dec := json.NewDecoder(file)
+	if err := dec.Decode(&records); err != nil {
 		log.Fatal(err)
 	}
 	return records

@@ -29,13 +29,13 @@ func main() {
 	singles := flag.Bool("singles", false, "Whether to include singles in the selection")
 	notShared := flag.Bool("not-shared", false, "Whether to exclude shared items")
 	forceUpdate := flag.Bool("force-update", false, "Whether to force update the cache")
-	debug := flag.Bool("debug", false, "Enable debug mode")
+	debugFlag := flag.Bool("debug", false, "Enable debug mode")
 
 	// Custom usage message
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [who] [options]\n\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "Positional arguments:")
-		fmt.Fprintln(os.Stderr, "  who\tWho's folder to get the item from (choices: alice, james, both)\n")
+		fmt.Fprintln(os.Stderr, "  who\tWho's folder to get the item from (choices: alice, james, both)")
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults() // prints all the flag definitions automatically
 	}
@@ -58,12 +58,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Print results
-	if *debug {
+	// Set package-level debug and print results
+	debug = *debugFlag
+	if debug {
 		fmt.Printf("who: %s\n", who)
 		fmt.Printf("singles: %v\n", *singles)
 		fmt.Printf("notShared: %v\n", *notShared)
-		fmt.Printf("debug: %v\n", *debug)
+		fmt.Printf("debug: %v\n", debug)
 		fmt.Printf("forceUpdate: %v\n", *forceUpdate)
 	}
 
@@ -74,12 +75,12 @@ func main() {
 	if cacheLength != collectionLength || *forceUpdate {
 		fmt.Printf("Cached records is a different length (%d vs %d), updating cache...\n", cacheLength, collectionLength)
 		updateCache()
-	} else if *debug {
+	} else if debug {
 		fmt.Println("Cache is up to date, no need to update.")
 	}
 
 	allRecords := getRecordsFromCache()
-	if *debug {
+	if debug {
 		fmt.Printf("Total records in cache: %d\n", len(allRecords))
 	}
 	filteredRecords := []models.Record{}
@@ -111,7 +112,7 @@ func main() {
 		}
 	}
 
-	if *debug {
+	if debug {
 		fmt.Printf("Total records after filtering: %d\n", len(filteredRecords))
 		for _, record := range filteredRecords {
 			displayRecord(record)
@@ -120,7 +121,6 @@ func main() {
 
 	item := getRandomItem(filteredRecords)
 	displayRecord(item)
-	return
 }
 
 func cacheDir() string {
