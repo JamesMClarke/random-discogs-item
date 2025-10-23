@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"random-discogs-item/models"
@@ -30,6 +31,15 @@ func addAuth(req *http.Request) {
 func getToken() string {
 	if cachedToken != "" {
 		return cachedToken
+	}
+	// Set working directory to script location
+	dir, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = os.Chdir(filepath.Dir(dir))
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Load env if necessary

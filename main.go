@@ -207,8 +207,8 @@ func filterRecordsByFolder(records []models.Record, folderName string) []models.
 }
 
 func displayRecord(record models.Record) {
-	fmt.Printf("Title: %s,", record.BasicInformation.Title)
-	fmt.Printf("Artists: %s,", func() string {
+	fmt.Printf("Title: %s, ", record.BasicInformation.Title)
+	fmt.Printf("Artists: %s, ", func() string {
 		artistNames := ""
 		for i, artist := range record.BasicInformation.Artists {
 			if i > 0 {
